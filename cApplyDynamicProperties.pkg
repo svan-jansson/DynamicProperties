@@ -1,0 +1,93 @@
+// Written by Erik Svensson and published on eriksven.com in May 2013
+
+Use VdfBase.pkg
+Use cHashTable.pkg
+
+Object oDynamicPropertyManager is a cHashTable
+    Procedure _makeKey Handle hObject String sPropertyName String ByRef sKey
+        Move ("{" + String(Object_Id(hObject)) + "}" + sPropertyName) to sKey
+    End_Procedure
+    
+    Procedure AssignValue Handle hObject String sPropertyName Variant vValue
+        String sKey
+        Send _makeKey hObject sPropertyName (&sKey)
+        Set Value sKey to vValue
+    End_Procedure
+    
+    Function AssignedValue Handle hObject String sPropertyName Returns Variant
+        String sKey
+        Variant vValue
+        Send _makeKey hObject sPropertyName (&sKey)
+        Get Value sKey to vValue
+        Function_Return vValue
+    End_Function
+    
+    Procedure UnassignValue Handle hObject String sPropertyName
+        String sKey
+        Send _makeKey hObject sPropertyName (&sKey)
+        Send DeleteKey sKey        
+    End_Procedure
+    
+    Function KeyList Handle hObject Returns String[]
+        Integer i ii iSize iSortOrder iPrefixLength
+        String[] saKeys saFiltered
+        Handle[] buckets
+        String sKey sPrefix
+        Variant vValue
+        
+        Move ("{" + String(Object_Id(hObject)) + "}") to sPrefix
+        Move (Length(sPrefix)) to iPrefixLength
+        
+        Get pBuckets to buckets
+        Move (SizeOfArray(buckets)-1) to iSize 
+        
+        For i from 0 to iSize
+            For ii from 0 to (Item_Count(buckets[i]) - 1)
+                Send AssociateByIndex of buckets[i] ii (&sKey) (&vValue) (&iSortOrder)
+                If (Left(sKey,iPrefixLength) = sPrefix and vValue <> NULL_ENTRY) Begin
+                    Move sKey to saKeys[iSortOrder]
+                End
+            Loop
+        Loop
+        
+        For i from 0 to (SizeOfArray(saKeys)-1)
+            If (saKeys[i] <> "") Begin
+                Move (Right(saKeys[i], Length(saKeys[i]) - iPrefixLength)) to saFiltered[SizeOfArray(saFiltered)]
+            End
+        Loop
+        
+        Function_Return saFiltered
+
+    End_Function
+   
+End_Object
+
+Class cDynamicPropertiesMixin is a Mixin
+    Procedure Set DynamicProperty String sPropertyName Variant vValue
+        Send AssignValue of oDynamicPropertyManager (Self) sPropertyName vValue
+    End_Procedure
+    
+    Function DynamicProperty String sPropertyName Returns Variant 
+        Variant vValue
+        Get AssignedValue of oDynamicPropertyManager (Self) sPropertyName to vValue
+        Function_Return vValue
+    End_Function
+    
+    Procedure RemoveDynamicProperty String sPropertyName
+        Send UnassignValue of oDynamicPropertyManager (Self) sPropertyName
+    End_Procedure
+    
+    Function HasDynamicProperty String sPropertyName Returns Boolean
+        Variant vValue
+        Get DynamicProperty sPropertyName to vValue
+        Function_Return (vValue <> NULL_ENTRY)
+    End_Function
+    
+    Function DynamicProperties Returns String[]
+        String[] saProperties
+        Get KeyList of oDynamicPropertyManager (Self) to saProperties
+        Function_Return saProperties
+    End_Function
+End_Class
+
+Import_Class_Protocol cDynamicPropertiesMixin cObject All Inherit
